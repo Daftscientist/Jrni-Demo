@@ -3,6 +3,7 @@ import { useAxios } from '../fetchContext';
 import ErrorBanner from '../components/ErrorBanner';
 import TextInput from '../components/TextInput';
 import Button from '../components/Button';
+import DropDown from '../components/DropDown';
 
 interface Question {
     id: string;
@@ -24,6 +25,9 @@ export default function Details() {
     const axios = useAxios();
     const [error, setError] = useState<string | null>(null);
     const [pageDetails, setPageDetails] = useState<PageDetails | null>(null);
+    const [isDropdownVisible, setIsDropdownVisible] = useState(false);
+    const [postcode, setPostcode] = useState<string>('');
+    const [addressOptions, setAddressOptions] = useState<string[]>([]);
 
     const mainDetails = async () => {
         try {
@@ -50,22 +54,26 @@ export default function Details() {
         event.preventDefault();
         const formData = new FormData(event.currentTarget);
 
+        const addy_dropdown = formData.get('address_dropdown');
+
+        const addy_json = JSON.parse(addy_dropdown as string);
+
         const number = formData.get('mobile_number') as string;
         const data = {
             consent: true,
             first_name: formData.get('first_name'),
             last_name: formData.get('last_name'),
-            address1: formData.get('address'),
-            address2: '',
-            address3: formData.get('county'),
-            address4: formData.get('town'),
+            address1: addy_json.BUILDING_NUMBER,
+            address2: addy_json.THOROUGHFARE_NAME,
+            address3: addy_json.POST_TOWN,
+            address4: addy_json.COUNTRY_CODE_DESCRIPTION.replace('This record is within ', ''), // replace with better system
             default_company_id: 37115,
             email: formData.get('email_address'),
             extra_info: { locale: 'en' },
             mobile: number.split('+44', 1)[1], // replace with better system,
             mobile_prefix: number.split('+44', 1)[0],
             mobile_prefix_country_code: 'GB',
-            postcode: formData.get('postcode'),
+            postcode: addy_json.POSTCODE,
             questions: pageDetails?.questions.map((question) => ({
                 id: question.id,
                 answer: formData.get('generated_programatically' + question.id),
@@ -140,11 +148,55 @@ export default function Details() {
             }
 
             localStorage.setItem('checkout_data', JSON.stringify(checkoutResp.data));
-            document.location.href = '/confirmation';
+            //document.location.href = '/confirmation';
         } catch (error) {
             setError('Error processing request');
         }
     };
+
+    const postcodeOnChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setPostcode(event.target.value);
+        // regex to validate postcode
+        const postcodeRegex = /^[A-Z]{1,2}[0-9]{1,2}[A-Z]?\s?[0-9][A-Z]{2}$/i;
+
+        if (postcodeRegex.test(event.target.value)) {
+            // make fetch request without using the axios instance
+            const postcode_key = '';
+            // use fetch
+
+            fetch(`https://api.os.uk/search/places/v1/postcode?postcode=${event.target.value}&key=${postcode_key}`).then(
+                (response) => {
+                    if (response.status === 200) {
+                        // get the json data
+                        response.json().then((data) => {
+                            setAddressOptions(data.results)
+                        });
+                    } else {
+                        setError('Invalid postcode');
+                        setIsDropdownVisible(false);
+                    }
+                }
+            )
+            setIsDropdownVisible(true);
+        } else {
+            setError('Invalid postcode');
+            setIsDropdownVisible(false);
+        }
+    };
+
+    const formulate_dropdown_items = (data: any) => {
+        const tbr: { id: string; name: any; value: any; }[] = []
+        data.map((addData: any) => {
+            tbr.push(
+                {
+                    id: addData.DPA.UPRN,
+                    name: addData.DPA.ADDRESS,
+                    value: JSON.stringify(addData.DPA)
+                }
+            )
+        })
+        return tbr;
+    }
 
     return (
         <>
@@ -155,10 +207,14 @@ export default function Details() {
                 <TextInput label='Last Name*' id='last_name' type='text' required={true} placeholder='' />
                 <TextInput label='Email address*' id='email_address' type='email' required={true} placeholder='' />
                 <TextInput label='Mobile Number' id='mobile_number' type='number' required={true} placeholder='' />
-                <TextInput label='Address' id='address' type='text' required={true} placeholder='' />
-                <TextInput label='Town/City' id='town' type='text' required={true} placeholder='' />
-                <TextInput label='County' id='county' type='text' required={true} placeholder='' />
-                <TextInput label='Postcode' id='postcode' type='text' required={true} placeholder='' />
+                <TextInput label='Postcode' id='postcode' type='text' required={true} placeholder={postcode} onChangeFunc={postcodeOnChange} />
+                {isDropdownVisible && (
+                    <DropDown
+                        title='Select Address'
+                        id='address_dropdown'
+                        items={formulate_dropdown_items(addressOptions)}
+                    />
+                )}
                 {pageDetails?.questions.map((question) => (
                     <TextInput
                         key={question.id}
