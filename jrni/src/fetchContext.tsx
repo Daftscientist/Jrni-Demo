@@ -3,10 +3,10 @@ import axios from "axios";
 
 // Create an Axios instance
 const axiosInstance = axios.create({
-  baseURL: 'https://demo-instance.demo.com/api/v5/',
+  baseURL: 'https://.bookingbug.com/api/v5/',
   headers: {
-    'App-Id': 'demo-instance',
-    'App-Key': 'demokey',
+    'App-Id': '',
+    'App-Key': ''
   }
 });
 
